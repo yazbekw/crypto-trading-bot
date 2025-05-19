@@ -1,0 +1,4 @@
+flask
+ccxt
+numpy
+python-dotenv
