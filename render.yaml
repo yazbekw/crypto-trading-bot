@@ -3,9 +3,7 @@ services:
     name: crypto-signal-bot
     env: python
     plan: free
-    buildCommand: |
-        pip install --upgrade pip
-        pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt
     startCommand: python crypto_bot.py
     envVars:
       - key: TELEGRAM_TOKEN
