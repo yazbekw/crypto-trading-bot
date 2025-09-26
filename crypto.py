@@ -43,17 +43,7 @@ class CryptoSignalBot:
             'SOL/USDT', 'DOT/USDT', 'LTC/USDT', 'LINK/USDT', 'BCH/USDT'
         ]
         
-        # إعدادات المؤشرات
-        self.indicators = {
-            'macd': self.calculate_macd,
-            'rsi': self.calculate_rsi,
-            'bollinger': self.calculate_bollinger,
-            'ichimoku': self.calculate_ichimoku,
-            'stochastic': self.calculate_stochastic
-        }
-        
-        # إعدادات الفحص الصحي
-        self.health_check_interval = 300  # 5 دقائق
+        self.health_check_interval = 300
         self.last_health_check = time.time()
         self.error_count = 0
         self.max_errors = 5
@@ -63,14 +53,11 @@ class CryptoSignalBot:
         try:
             current_time = time.time()
             
-            # فحص اتصال التلغرام
             if self.bot:
                 self.bot.get_me()
             
-            # فحص اتصال exchange
             self.exchange.fetch_ticker('BTC/USDT')
             
-            # فحص الوقت منذ آخر فحص صحي
             if current_time - self.last_health_check > self.health_check_interval * 2:
                 logging.warning("تأخر في الفحوصات الصحية")
                 self.error_count += 1
@@ -103,7 +90,7 @@ class CryptoSignalBot:
             return None
 
     def calculate_macd(self, df):
-        """حساب مؤشر MACD"""
+        """حساب مؤشر MACD يدوياً"""
         try:
             exp1 = df['close'].ewm(span=12).mean()
             exp2 = df['close'].ewm(span=26).mean()
@@ -111,7 +98,6 @@ class CryptoSignalBot:
             signal = macd.ewm(span=9).mean()
             histogram = macd - signal
             
-            # حساب قوة الإشارة
             current_macd = macd.iloc[-1]
             current_signal = signal.iloc[-1]
             current_hist = histogram.iloc[-1]
@@ -128,7 +114,7 @@ class CryptoSignalBot:
             return None
 
     def calculate_rsi(self, df, period=14):
-        """حساب مؤشر RSI"""
+        """حساب مؤشر RSI يدوياً"""
         try:
             delta = df['close'].diff()
             gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
@@ -152,7 +138,7 @@ class CryptoSignalBot:
             return None
 
     def calculate_bollinger(self, df, period=20):
-        """حساب Bollinger Bands"""
+        """حساب Bollinger Bands يدوياً"""
         try:
             sma = df['close'].rolling(period).mean()
             std = df['close'].rolling(period).std()
@@ -162,7 +148,6 @@ class CryptoSignalBot:
             current_close = df['close'].iloc[-1]
             current_upper = upper_band.iloc[-1]
             current_lower = lower_band.iloc[-1]
-            current_sma = sma.iloc[-1]
             
             if current_close <= current_lower:
                 strength = min(100, ((current_lower - current_close) / current_close) * 1000)
@@ -178,9 +163,8 @@ class CryptoSignalBot:
             return None
 
     def calculate_ichimoku(self, df):
-        """حساب إيشيموكو"""
+        """حساب إيشيموكو يدوياً"""
         try:
-            # حساب مكونات إيشيموكو
             high_9 = df['high'].rolling(9).max()
             low_9 = df['low'].rolling(9).min()
             tenkan_sen = (high_9 + low_9) / 2
@@ -188,12 +172,6 @@ class CryptoSignalBot:
             high_26 = df['high'].rolling(26).max()
             low_26 = df['low'].rolling(26).min()
             kijun_sen = (high_26 + low_26) / 2
-            
-            senkou_span_a = ((tenkan_sen + kijun_sen) / 2).shift(26)
-            
-            high_52 = df['high'].rolling(52).max()
-            low_52 = df['low'].rolling(52).min()
-            senkou_span_b = ((high_52 + low_52) / 2).shift(26)
             
             current_close = df['close'].iloc[-1]
             current_tenkan = tenkan_sen.iloc[-1]
@@ -213,21 +191,19 @@ class CryptoSignalBot:
             return None
 
     def calculate_stochastic(self, df):
-        """حساب Stochastic"""
+        """حساب Stochastic يدوياً"""
         try:
             low_14 = df['low'].rolling(14).min()
             high_14 = df['high'].rolling(14).max()
             k_percent = 100 * ((df['close'] - low_14) / (high_14 - low_14))
-            d_percent = k_percent.rolling(3).mean()
             
             current_k = k_percent.iloc[-1]
-            current_d = d_percent.iloc[-1]
             
-            if current_k < 20 and current_d < 20:
-                strength = min(100, (20 - min(current_k, current_d)) / 20 * 100)
+            if current_k < 20:
+                strength = min(100, (20 - current_k) / 20 * 100)
                 return {'signal': 'BUY', 'strength': strength, 'value': current_k}
-            elif current_k > 80 and current_d > 80:
-                strength = min(100, (max(current_k, current_d) - 80) / 20 * 100)
+            elif current_k > 80:
+                strength = min(100, (current_k - 80) / 20 * 100)
                 return {'signal': 'SELL', 'strength': strength, 'value': current_k}
             else:
                 return {'signal': 'NEUTRAL', 'strength': 0, 'value': current_k}
@@ -240,39 +216,44 @@ class CryptoSignalBot:
         """تحليل عملة واحدة"""
         try:
             df = self.fetch_ohlcv(symbol)
-            if df is None or len(df) < 100:
+            if df is None or len(df) < 50:
                 return None
             
-            indicator_results = {}
-            valid_indicators = 0
+            indicators = {
+                'macd': self.calculate_macd(df),
+                'rsi': self.calculate_rsi(df),
+                'bollinger': self.calculate_bollinger(df),
+                'ichimoku': self.calculate_ichimoku(df),
+                'stochastic': self.calculate_stochastic(df)
+            }
+            
+            valid_indicators = {}
             total_strength = 0
             buy_signals = 0
             sell_signals = 0
             
-            for indicator_name, indicator_func in self.indicators.items():
-                result = indicator_func(df)
+            for name, result in indicators.items():
                 if result and result['strength'] > 50:
-                    indicator_results[indicator_name] = result
+                    valid_indicators[name] = result
                     total_strength += result['strength']
-                    valid_indicators += 1
                     
                     if result['signal'] == 'BUY':
                         buy_signals += 1
                     elif result['signal'] == 'SELL':
                         sell_signals += 1
             
-            if valid_indicators == 0:
+            if not valid_indicators:
                 return None
             
-            overall_strength = total_strength / valid_indicators
+            overall_strength = total_strength / len(valid_indicators)
             overall_signal = 'BUY' if buy_signals > sell_signals else 'SELL'
             
             return {
                 'symbol': symbol,
                 'signal': overall_signal,
                 'strength': overall_strength,
-                'indicators': indicator_results,
-                'valid_indicators': valid_indicators
+                'indicators': valid_indicators,
+                'valid_count': len(valid_indicators)
             }
             
         except Exception as e:
@@ -310,11 +291,8 @@ class CryptoSignalBot:
             logging.info(f"تم إرسال إشارة لـ {symbol}")
             return True
             
-        except TelegramError as e:
-            logging.error(f"خطأ في إرسال الرسالة: {e}")
-            return False
         except Exception as e:
-            logging.error(f"خطأ غير متوقع في الإرسال: {e}")
+            logging.error(f"خطأ في إرسال الرسالة: {e}")
             return False
 
     def send_alert(self, message):
@@ -337,7 +315,6 @@ class CryptoSignalBot:
         try:
             logging.info("بدء فحص السوق...")
             
-            # فحص الصحة أولاً
             if not self.health_check():
                 logging.warning("فحص الصحة فشل، تأجيل الفحص")
                 return
@@ -348,11 +325,8 @@ class CryptoSignalBot:
                 analysis = self.analyze_symbol(symbol)
                 if analysis and analysis['strength'] > 60:
                     strong_signals.append(analysis)
-            
-            # إرسال الإشارات القوية
-            for signal in strong_signals:
-                self.send_signal(signal)
-                time.sleep(1)  # تجنب rate limiting
+                    self.send_signal(analysis)
+                    time.sleep(1)
             
             logging.info(f"اكتمل الفحص. تم العثور على {len(strong_signals)} إشارة قوية")
             
@@ -365,19 +339,15 @@ class CryptoSignalBot:
         try:
             logging.info("بدء تشغيل بوت الإشارات...")
             
-            # فحص الإعدادات
             if not self.telegram_token or not self.chat_id:
                 logging.error("لم يتم تعيين إعدادات التلغرام!")
                 return
             
-            # جدولة المهام
             schedule.every(15).minutes.do(self.scan_market)
             schedule.every(5).minutes.do(self.health_check)
             
-            # فحص أولي
             self.scan_market()
             
-            # التشغيل المستمر
             while True:
                 schedule.run_pending()
                 time.sleep(1)
@@ -389,7 +359,6 @@ class CryptoSignalBot:
             traceback.print_exc()
 
 def main():
-    """الدالة الرئيسية"""
     bot = CryptoSignalBot()
     bot.run()
 
