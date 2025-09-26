@@ -3,10 +3,12 @@ services:
     name: crypto-signal-bot
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt
+    buildCommand: |
+        pip install --upgrade pip
+        pip install -r requirements.txt
     startCommand: python crypto_bot.py
     envVars:
       - key: TELEGRAM_TOKEN
-        value: your_telegram_bot_token_here
+        sync: false
       - key: TELEGRAM_CHAT_ID
-        value: your_chat_id_here
+        sync: false
