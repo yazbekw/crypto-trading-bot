@@ -16,11 +16,7 @@ load_dotenv()
 # إعداد التسجيل
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('bot.log'),
-        logging.StreamHandler()
-    ]
+    format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
 class CryptoSignalBot:
@@ -67,7 +63,7 @@ class CryptoSignalBot:
             self.last_health_check = current_time
             
             if self.error_count >= self.max_errors:
-                self.send_alert("⚠️ البوت يعاني من مشاكل متكررة. يلزم التدخل الفوري!")
+                self.send_alert("⚠️ البوت يعاني من مشاكل متكررة")
                 self.error_count = 0
             
             logging.info("فحص الصحة OK")
@@ -103,11 +99,13 @@ class CryptoSignalBot:
             current_hist = histogram.iloc[-1]
             
             if current_macd > current_signal and current_hist > 0:
-                strength = min(100, abs(current_hist) / df['close'].iloc[-1] * 1000)
+                strength = min(80, abs(current_hist) / df['close'].iloc[-1] * 5000)
                 return {'signal': 'BUY', 'strength': strength, 'value': current_macd}
-            else:
-                strength = min(100, abs(current_hist) / df['close'].iloc[-1] * 1000)
+            elif current_macd < current_signal and current_hist < 0:
+                strength = min(80, abs(current_hist) / df['close'].iloc[-1] * 5000)
                 return {'signal': 'SELL', 'strength': strength, 'value': current_macd}
+            else:
+                return {'signal': 'NEUTRAL', 'strength': 0, 'value': current_macd}
                 
         except Exception as e:
             logging.error(f"خطأ في حساب MACD: {e}")
@@ -125,10 +123,10 @@ class CryptoSignalBot:
             current_rsi = rsi.iloc[-1]
             
             if current_rsi < 30:
-                strength = min(100, (30 - current_rsi) / 30 * 100)
+                strength = min(80, (30 - current_rsi) / 30 * 80)
                 return {'signal': 'BUY', 'strength': strength, 'value': current_rsi}
             elif current_rsi > 70:
-                strength = min(100, (current_rsi - 70) / 30 * 100)
+                strength = min(80, (current_rsi - 70) / 30 * 80)
                 return {'signal': 'SELL', 'strength': strength, 'value': current_rsi}
             else:
                 return {'signal': 'NEUTRAL', 'strength': 0, 'value': current_rsi}
@@ -150,44 +148,16 @@ class CryptoSignalBot:
             current_lower = lower_band.iloc[-1]
             
             if current_close <= current_lower:
-                strength = min(100, ((current_lower - current_close) / current_close) * 1000)
+                strength = min(80, ((current_lower - current_close) / current_close) * 1000)
                 return {'signal': 'BUY', 'strength': strength, 'value': current_close}
             elif current_close >= current_upper:
-                strength = min(100, ((current_close - current_upper) / current_close) * 1000)
+                strength = min(80, ((current_close - current_upper) / current_close) * 1000)
                 return {'signal': 'SELL', 'strength': strength, 'value': current_close}
             else:
                 return {'signal': 'NEUTRAL', 'strength': 0, 'value': current_close}
                 
         except Exception as e:
             logging.error(f"خطأ في حساب Bollinger Bands: {e}")
-            return None
-
-    def calculate_ichimoku(self, df):
-        """حساب إيشيموكو يدوياً"""
-        try:
-            high_9 = df['high'].rolling(9).max()
-            low_9 = df['low'].rolling(9).min()
-            tenkan_sen = (high_9 + low_9) / 2
-            
-            high_26 = df['high'].rolling(26).max()
-            low_26 = df['low'].rolling(26).min()
-            kijun_sen = (high_26 + low_26) / 2
-            
-            current_close = df['close'].iloc[-1]
-            current_tenkan = tenkan_sen.iloc[-1]
-            current_kijun = kijun_sen.iloc[-1]
-            
-            if current_close > current_tenkan and current_tenkan > current_kijun:
-                strength = min(100, abs(current_close - current_tenkan) / current_close * 1000)
-                return {'signal': 'BUY', 'strength': strength, 'value': current_tenkan}
-            elif current_close < current_tenkan and current_tenkan < current_kijun:
-                strength = min(100, abs(current_close - current_tenkan) / current_close * 1000)
-                return {'signal': 'SELL', 'strength': strength, 'value': current_tenkan}
-            else:
-                return {'signal': 'NEUTRAL', 'strength': 0, 'value': current_tenkan}
-                
-        except Exception as e:
-            logging.error(f"خطأ في حساب Ichimoku: {e}")
             return None
 
     def calculate_stochastic(self, df):
@@ -200,16 +170,33 @@ class CryptoSignalBot:
             current_k = k_percent.iloc[-1]
             
             if current_k < 20:
-                strength = min(100, (20 - current_k) / 20 * 100)
+                strength = min(80, (20 - current_k) / 20 * 80)
                 return {'signal': 'BUY', 'strength': strength, 'value': current_k}
             elif current_k > 80:
-                strength = min(100, (current_k - 80) / 20 * 100)
+                strength = min(80, (current_k - 80) / 20 * 80)
                 return {'signal': 'SELL', 'strength': strength, 'value': current_k}
             else:
                 return {'signal': 'NEUTRAL', 'strength': 0, 'value': current_k}
                 
         except Exception as e:
             logging.error(f"خطأ في حساب Stochastic: {e}")
+            return None
+
+    def calculate_volume(self, df):
+        """حساب مؤشر الحجم"""
+        try:
+            volume_avg = df['volume'].rolling(20).mean()
+            current_volume = df['volume'].iloc[-1]
+            volume_ratio = current_volume / volume_avg.iloc[-1]
+            
+            if volume_ratio > 1.5:
+                strength = min(60, (volume_ratio - 1) * 40)
+                return {'signal': 'BUY', 'strength': strength, 'value': volume_ratio}
+            else:
+                return {'signal': 'NEUTRAL', 'strength': 0, 'value': volume_ratio}
+                
+        except Exception as e:
+            logging.error(f"خطأ في حساب الحجم: {e}")
             return None
 
     def analyze_symbol(self, symbol):
@@ -223,8 +210,8 @@ class CryptoSignalBot:
                 'macd': self.calculate_macd(df),
                 'rsi': self.calculate_rsi(df),
                 'bollinger': self.calculate_bollinger(df),
-                'ichimoku': self.calculate_ichimoku(df),
-                'stochastic': self.calculate_stochastic(df)
+                'stochastic': self.calculate_stochastic(df),
+                'volume': self.calculate_volume(df)
             }
             
             valid_indicators = {}
@@ -273,14 +260,14 @@ class CryptoSignalBot:
             
             message = f"🚨 **إشارة {signal}** 🚨\n"
             message += f"**العملة:** {symbol}\n"
-            message += f"**القوة الإجمالية:** {strength:.2f}%\n"
+            message += f"**القوة الإجمالية:** {strength:.1f}%\n"
             message += f"**عدد المؤشرات المشاركة:** {len(indicators)}\n\n"
             message += "**تفاصيل المؤشرات:**\n"
             
             for ind_name, ind_data in indicators.items():
-                message += f"• {ind_name.upper()}: {ind_data['signal']} ({ind_data['strength']:.2f}%)\n"
+                message += f"• {ind_name.upper()}: {ind_data['signal']} ({ind_data['strength']:.1f}%)\n"
             
-            message += f"\n⏰ الوقت: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            message += f"\n⏰ {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}"
             
             self.bot.send_message(
                 chat_id=self.chat_id,
@@ -316,23 +303,18 @@ class CryptoSignalBot:
             logging.info("بدء فحص السوق...")
             
             if not self.health_check():
-                logging.warning("فحص الصحة فشل، تأجيل الفحص")
                 return
-            
-            strong_signals = []
             
             for symbol in self.symbols:
                 analysis = self.analyze_symbol(symbol)
                 if analysis and analysis['strength'] > 60:
-                    strong_signals.append(analysis)
                     self.send_signal(analysis)
-                    time.sleep(1)
+                    time.sleep(2)
             
-            logging.info(f"اكتمل الفحص. تم العثور على {len(strong_signals)} إشارة قوية")
+            logging.info("اكتمل فحص السوق")
             
         except Exception as e:
             logging.error(f"خطأ في فحص السوق: {e}")
-            traceback.print_exc()
 
     def run(self):
         """تشغيل البوت"""
@@ -343,20 +325,21 @@ class CryptoSignalBot:
                 logging.error("لم يتم تعيين إعدادات التلغرام!")
                 return
             
-            schedule.every(15).minutes.do(self.scan_market)
-            schedule.every(5).minutes.do(self.health_check)
-            
+            # فحص أولي
             self.scan_market()
+            
+            # جدولة
+            schedule.every(15).minutes.do(self.scan_market)
+            schedule.every(10).minutes.do(self.health_check)
             
             while True:
                 schedule.run_pending()
-                time.sleep(1)
+                time.sleep(60)  # انتظار دقيقة بين كل فحص
                 
         except KeyboardInterrupt:
             logging.info("إيقاف البوت...")
         except Exception as e:
             logging.error(f"خطأ غير متوقع: {e}")
-            traceback.print_exc()
 
 def main():
     bot = CryptoSignalBot()
